@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="aui-font-mode" content="mc">
+    <meta name="aui-viewport" content="mode=browser,user-scalable=false">
+    <meta name="aui-mouse-events" content="intercept">
+    <link rel="stylesheet" href="questbook-v3.css">
+    <title>任务手册</title>
+</head>
+<body id="questbook-body">
+<div class="app-shell">
+    <header class="topbar">
+        <div class="brand">
+            <span class="eyebrow">FTB QUESTS</span>
+            <h1 id="book-title">任务手册</h1>
+        </div>
+        <input id="quest-search" class="search-input" type="search" placeholder="搜索任务、目标或说明">
+        <button id="vanilla-editor-button" class="hidden">FTB 编辑器</button>
+        <button id="close-button" class="close-button" aria-label="关闭">×</button>
+    </header>
+
+    <div class="workspace">
+        <aside class="chapter-panel">
+            <div class="panel-heading">
+                <span class="eyebrow">目录</span>
+                <h2>章节</h2>
+            </div>
+            <nav id="chapter-list" class="chapter-list"></nav>
+        </aside>
+
+        <main id="map-panel" class="map-panel">
+            <div class="map-toolbar">
+                <div class="chapter-heading">
+                    <span class="eyebrow">当前章节</span>
+                    <h2 id="chapter-title">任务地图</h2>
+                    <p id="chapter-subtitle" class="chapter-subtitle"></p>
+                </div>
+                <span id="result-count" class="result-count"></span>
+            </div>
+            <div id="map-viewport" class="map-viewport">
+                <div id="map-stage" class="map-stage"></div>
+            </div>
+
+            <div id="quest-detail-empty" class="empty-state detail-empty">
+            </div>
+            <aside id="quest-detail" class="detail-panel hidden">
+                <button id="detail-close-button" class="detail-close" aria-label="关闭详情">×</button>
+                <div class="detail-header">
+                    <span id="quest-state" class="status-badge"></span>
+                    <h2 id="quest-title"></h2>
+                    <p id="quest-subtitle" class="detail-subtitle"></p>
+                </div>
+                <p id="quest-details-locked" class="hidden">详细内容将在任务可开始后显示。</p>
+                <div id="quest-detail-content" class="detail-body">
+                <p id="quest-description" class="quest-description"></p>
+                <div class="progress-block">
+                    <div class="progress-heading">
+                        <span>任务进度</span>
+                        <span id="quest-progress-label"></span>
+                    </div>
+                    <div class="progress-track"><div id="quest-progress-bar" class="progress-fill"></div></div>
+                </div>
+                <div class="detail-section">
+                    <h3>目标</h3>
+                    <ul id="task-list" class="entry-list"></ul>
+                </div>
+                <div class="detail-section">
+                    <h3>奖励</h3>
+                    <ul id="reward-list" class="entry-list"></ul>
+                </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+</div>
+<script>
+(function () {
+    var viewport = document.getElementById("map-viewport");
+    if (!viewport) {
+        return;
+    }
+
+    var dragging = false;
+    var lastX = 0;
+    var lastY = 0;
+
+    viewport.addEventListener("mousedown", function (event) {
+        if (event.button !== 0) {
+            return;
+        }
+        var target = event.target;
+        if (target && target.closest && target.closest(".map-node")) {
+            return;
+        }
+        dragging = true;
+        lastX = event.clientX;
+        lastY = event.clientY;
+        viewport.classList.add("dragging");
+        event.preventDefault();
+    });
+
+    document.addEventListener("mousemove", function (event) {
+        if (!dragging) {
+            return;
+        }
+        var deltaX = event.clientX - lastX;
+        var deltaY = event.clientY - lastY;
+        viewport.scrollBy(-deltaX, -deltaY);
+        lastX = event.clientX;
+        lastY = event.clientY;
+    });
+
+    document.addEventListener("mouseup", function () {
+        if (!dragging) {
+            return;
+        }
+        dragging = false;
+        viewport.classList.remove("dragging");
+    });
+
+    viewport.addEventListener("wheel", function (event) {
+        event.preventDefault();
+    }, true);
+})();
+</script>
+</body>
+</html>

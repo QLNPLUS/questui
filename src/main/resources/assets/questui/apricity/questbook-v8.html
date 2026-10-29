@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="aui-font-mode" content="mc">
+    <meta name="aui-viewport" content="mode=browser,user-scalable=false">
+    <meta name="aui-mouse-events" content="intercept">
+    <link rel="stylesheet" href="questbook-v8.css">
+    <title>任务手册</title>
+</head>
+<body id="questbook-body">
+<div class="app-shell">
+    <header class="topbar">
+        <div class="brand">
+            <span class="eyebrow">FTB QUESTS</span>
+            <h1 id="book-title">任务手册</h1>
+        </div>
+        <div class="search-control">
+            <input id="quest-search" class="search-input" type="search" placeholder="搜索任务、目标或说明">
+            <button id="search-settings-toggle" class="search-settings-toggle" aria-label="搜索与外观设置" title="搜索与外观设置">⚙</button>
+            <div id="search-settings-panel" class="search-settings hidden">
+                <div class="setting-group">
+                    <span class="setting-label">搜索范围</span>
+                    <div class="scope-options">
+                        <button id="search-scope-current" class="scope-button selected">本章节</button>
+                        <button id="search-scope-all" class="scope-button">全部章节</button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <span class="setting-label">搜索内容</span>
+                    <div class="filter-options">
+                        <button id="filter-chapter" class="filter-chip active" data-search-filter="chapterNames">章节</button>
+                        <button id="filter-quest" class="filter-chip active" data-search-filter="questNames">任务与说明</button>
+                        <button id="filter-task-reward" class="filter-chip active" data-search-filter="tasksAndRewards">目标与奖励</button>
+                    </div>
+                </div>
+                <div class="setting-group theme-setting">
+                    <span class="setting-label">主题色</span>
+                    <div class="theme-options">
+                        <button id="theme-green" class="theme-swatch theme-green" data-theme-option="green" aria-label="绿色主题" title="绿色"></button>
+                        <button id="theme-yellow" class="theme-swatch theme-yellow" data-theme-option="yellow" aria-label="黄色主题" title="黄色"></button>
+                        <button id="theme-blue" class="theme-swatch theme-blue" data-theme-option="blue" aria-label="蓝色主题" title="蓝色"></button>
+                        <button id="theme-cyan" class="theme-swatch theme-cyan" data-theme-option="cyan" aria-label="青色主题" title="青色"></button>
+                        <button id="theme-purple" class="theme-swatch theme-purple" data-theme-option="purple" aria-label="紫色主题" title="紫色"></button>
+                        <button id="theme-pink" class="theme-swatch theme-pink" data-theme-option="pink" aria-label="粉色主题" title="粉色"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button id="vanilla-editor-button" class="hidden">FTB 编辑器</button>
+        <button id="close-button" class="close-button" aria-label="关闭">×</button>
+    </header>
+
+    <div class="workspace">
+        <aside id="chapter-panel" class="chapter-panel">
+            <div class="panel-heading">
+                <div class="panel-heading-copy">
+                    <span class="eyebrow">目录</span>
+                    <h2>章节</h2>
+                </div>
+                <button id="chapter-collapse-toggle" class="chapter-collapse-toggle" aria-label="收起章节栏" title="收起章节栏">‹</button>
+            </div>
+            <nav id="chapter-list" class="chapter-list"></nav>
+        </aside>
+
+        <main id="map-panel" class="map-panel">
+            <div id="map-toolbar" class="map-toolbar">
+                <div class="chapter-heading">
+                    <span class="eyebrow">当前章节</span>
+                    <h2 id="chapter-title">任务地图</h2>
+                    <p id="chapter-subtitle" class="chapter-subtitle"></p>
+                </div>
+                <span id="result-count" class="result-count"></span>
+            </div>
+            <div id="map-viewport" class="map-viewport">
+                <div id="map-stage" class="map-stage"></div>
+            </div>
+
+            <aside id="quest-detail" class="detail-panel hidden">
+                <button id="detail-close-button" class="detail-close" aria-label="关闭详情">×</button>
+                <div class="detail-header">
+                    <span id="quest-state" class="status-badge"></span>
+                    <h2 id="quest-title"></h2>
+                    <p id="quest-subtitle" class="detail-subtitle"></p>
+                </div>
+                <p id="quest-details-locked" class="hidden">详细内容将在任务可开始后显示。</p>
+                <div id="quest-detail-content" class="detail-body">
+                <p id="quest-description" class="quest-description"></p>
+                <div class="progress-block">
+                    <div class="progress-heading">
+                        <span>任务进度</span>
+                        <span id="quest-progress-label"></span>
+                    </div>
+                    <div class="progress-track"><div id="quest-progress-bar" class="progress-fill"></div></div>
+                </div>
+                <div class="detail-section">
+                    <h3>目标</h3>
+                    <ul id="task-list" class="entry-list"></ul>
+                </div>
+                <div class="detail-section">
+                    <h3>奖励</h3>
+                    <ul id="reward-list" class="entry-list"></ul>
+                </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+</div>
+<script>
+(function () {
+    var viewport = document.getElementById("map-viewport");
+    if (!viewport) {
+        return;
+    }
+
+    try {
+        if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            document.body.setAttribute("data-reduced-motion", "true");
+        }
+    } catch (ignored) {
+    }
+
+    var detailPanel = document.getElementById("quest-detail");
+    var wheelTraceSequence = 0;
+    var wheelTraceEntries = [];
+    var lastWheelContext = "none";
+
+    function wheelTargetLabel(target) {
+        if (!target) {
+            return "null";
+        }
+        return (target.tagName || "node") + (target.id ? "#" + target.id : "");
+    }
+
+    function wheelScrollState(element) {
+        return element.getScrollLeft() + "," + element.getScrollTop();
+    }
+
+    function publishWheelTrace(entry) {
+        wheelTraceEntries.push(entry);
+        if (wheelTraceEntries.length > 4) {
+            wheelTraceEntries.shift();
+        }
+        viewport.setAttribute("data-wheel-trace", wheelTraceEntries.join(" || "));
+    }
+
+    function recordWheelTrace(event, branch, element, before, preventedBefore) {
+        var sequence = ++wheelTraceSequence;
+        var entry = "seq=" + sequence + " source=wheel branch=" + branch
+            + " time=" + event.timeStamp + " shift=" + !!event.shiftKey
+            + " delta=" + (event.deltaX || 0) + "," + (event.deltaY || 0)
+            + " target=" + wheelTargetLabel(event.target)
+            + " prevented=" + preventedBefore + "->" + !!event.defaultPrevented
+            + " scrollBefore=" + before + " scrollAfter=" + wheelScrollState(element);
+        lastWheelContext = "seq=" + sequence + ",branch=" + branch + ",shift=" + !!event.shiftKey
+            + ",delta=" + (event.deltaY || 0);
+        publishWheelTrace(entry);
+    }
+
+    function watchWheelScroll(element, name) {
+        if (!element) {
+            return;
+        }
+        element.addEventListener("scroll", function (event) {
+            publishWheelTrace("seq=" + (++wheelTraceSequence) + " source=scroll element=" + name
+                + " time=" + event.timeStamp + " after=" + wheelScrollState(element)
+                + " previousWheel=" + lastWheelContext);
+        }, false);
+    }
+
+    watchWheelScroll(viewport, "viewport");
+    watchWheelScroll(detailPanel, "detail");
+
+    if (detailPanel) {
+        detailPanel.addEventListener("wheel", function (event) {
+            var before = wheelScrollState(detailPanel);
+            var preventedBefore = !!event.defaultPrevented;
+            detailPanel.scrollBy(event.deltaX || 0, event.deltaY || 0);
+            event.preventDefault();
+            recordWheelTrace(event, "detail-scroll", detailPanel, before, preventedBefore);
+        }, true);
+    }
+
+    var pointerDown = false;
+    var dragging = false;
+    var pressedMapNode = false;
+    var suppressNextMapClick = false;
+    var startX = 0;
+    var startY = 0;
+    var lastX = 0;
+    var lastY = 0;
+    var dragThresholdSquared = 16;
+
+    document.addEventListener("mousedown", function (event) {
+        if (event.button !== 0) {
+            return;
+        }
+        var viewportBounds = viewport.getBoundingClientRect();
+        if (!viewportBounds || viewportBounds.width <= 0 || viewportBounds.height <= 0
+                || event.clientX < viewportBounds.x || event.clientX >= viewportBounds.x + viewportBounds.width
+                || event.clientY < viewportBounds.y || event.clientY >= viewportBounds.y + viewportBounds.height) {
+            return;
+        }
+        var target = event.target;
+        if (detailPanel && target && target.closest && target.closest("#quest-detail")
+                && !detailPanel.classList.contains("hidden")) {
+            return;
+        }
+        suppressNextMapClick = false;
+        pointerDown = true;
+        dragging = false;
+        startX = lastX = event.clientX;
+        startY = lastY = event.clientY;
+        pressedMapNode = !!(target && target.closest && target.closest(".map-node"));
+        if (!pressedMapNode) {
+            viewport.scrollTo(viewport.getScrollLeft(), viewport.getScrollTop());
+            dragging = true;
+            viewport.classList.add("dragging");
+            event.preventDefault();
+        }
+    }, true);
+
+    document.addEventListener("mousemove", function (event) {
+        if (!pointerDown) {
+            return;
+        }
+        var deltaX;
+        var deltaY;
+        if (!dragging) {
+            var fromPressX = event.clientX - startX;
+            var fromPressY = event.clientY - startY;
+            if (fromPressX * fromPressX + fromPressY * fromPressY < dragThresholdSquared) {
+                return;
+            }
+            viewport.scrollTo(viewport.getScrollLeft(), viewport.getScrollTop());
+            dragging = true;
+            viewport.classList.add("dragging");
+            deltaX = fromPressX;
+            deltaY = fromPressY;
+        } else {
+            deltaX = event.clientX - lastX;
+            deltaY = event.clientY - lastY;
+        }
+        viewport.scrollBy(-deltaX, -deltaY);
+        lastX = event.clientX;
+        lastY = event.clientY;
+        event.preventDefault();
+    }, true);
+
+    document.addEventListener("mouseup", function (event) {
+        if (event.button !== 0 || !pointerDown) {
+            return;
+        }
+        if (dragging) {
+            viewport.classList.remove("dragging");
+            suppressNextMapClick = pressedMapNode;
+        }
+        pointerDown = false;
+        dragging = false;
+        pressedMapNode = false;
+    }, true);
+
+    document.addEventListener("click", function (event) {
+        if (!suppressNextMapClick) {
+            return;
+        }
+        suppressNextMapClick = false;
+        var target = event.target;
+        if (target && target.closest && target.closest(".map-node")) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, true);
+
+    viewport.addEventListener("wheel", function (event) {
+        var before = wheelScrollState(viewport);
+        var preventedBefore = !!event.defaultPrevented;
+        if (event.shiftKey) {
+            var target = event.target;
+            if (detailPanel && target && (target === detailPanel || (target.closest && target.closest("#quest-detail")))) {
+                recordWheelTrace(event, "shift-detail-pass", viewport, before, preventedBefore);
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            recordWheelTrace(event, "shift-block", viewport, before, preventedBefore);
+            return;
+        }
+        viewport.scrollBy(event.deltaX || 0, event.deltaY || 0);
+        event.preventDefault();
+        recordWheelTrace(event, "normal-pan", viewport, before, preventedBefore);
+    }, true);
+})();
+</script>
+</body>
+</html>

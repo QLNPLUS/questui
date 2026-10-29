@@ -1,0 +1,8 @@
+.gradle/
+build/
+run/
+run-filtered/
+.narrafork/
+.idea/
+*.iml
+src/main/java/summary.txt

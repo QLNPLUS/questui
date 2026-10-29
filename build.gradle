@@ -1,0 +1,119 @@
+plugins {
+    id 'net.neoforged.moddev.legacyforge' version '2.0.147'
+}
+
+group = mod_group_id
+version = mod_version
+base.archivesName = "${mod_id}-forge-${minecraft_version}"
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+
+def decompiledNameMappings = [
+        'm_91087_': 'getInstance',
+        'f_91080_': 'screen',
+        'f_91074_': 'player',
+        'f_91069_': 'gameDirectory',
+        'm_91152_': 'setScreen',
+        'm_91268_': 'getWindow',
+        'm_280618_': 'disableScissor',
+        'm_280588_': 'enableScissor',
+        'm_85445_': 'getGuiScaledWidth',
+        'm_85446_': 'getGuiScaledHeight',
+        'm_85443_': 'getScreenWidth',
+        'm_85444_': 'getScreenHeight',
+        'm_20148_': 'getUUID'
+]
+
+def remappedSourceDir = layout.buildDirectory.dir('generated/sources/remapped/main/java')
+sourceSets {
+    main {
+        java.setSrcDirs([remappedSourceDir])
+    }
+}
+
+legacyForge {
+    version = "${minecraft_version}-${forge_version}"
+    runs {
+        client {
+            client()
+            gameDirectory = file(project.hasProperty('questuiFilteredRun') ? 'run-filtered' : 'run')
+            systemProperty 'forge.logging.console.level', 'info'
+            systemProperty 'questui.debug.map', 'true'
+            if (project.hasProperty('questuiTestWorld')) {
+                programArgument '--quickPlaySingleplayer'
+                programArgument project.property('questuiTestWorld')
+            }
+        }
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = 'FTB Maven'
+        url = 'https://maven.ftb.dev/releases'
+        content { includeGroup 'dev.ftb.mods' }
+    }
+    maven {
+        name = 'Apricity Maven'
+        url = 'https://maven.sighs.cc/repository/maven-public/'
+        content { includeGroup 'com.sighs' }
+    }
+    maven {
+        name = 'Architectury Maven'
+        url = 'https://maven.architectury.dev'
+        content { includeGroup 'dev.architectury' }
+    }
+    mavenCentral()
+}
+
+dependencies {
+    modCompileOnly("dev.ftb.mods:ftb-quests-forge:${ftb_quests_version}")
+    modCompileOnly("dev.ftb.mods:ftb-library-forge:${ftb_library_version}")
+    modCompileOnly("dev.ftb.mods:ftb-teams-forge:${ftb_teams_version}")
+    modCompileOnly("dev.architectury:architectury-forge:${architectury_version}")
+    modCompileOnly("com.sighs:ApricityUI-forge-1.20.1:${apricityui_version}")
+
+    if (!project.hasProperty('questuiLastOneMods')) {
+        modRuntimeOnly("dev.ftb.mods:ftb-quests-forge:${ftb_quests_version}")
+        modRuntimeOnly("dev.ftb.mods:ftb-library-forge:${ftb_library_version}")
+        modRuntimeOnly("dev.ftb.mods:ftb-teams-forge:${ftb_teams_version}")
+        modRuntimeOnly("dev.architectury:architectury-forge:${architectury_version}")
+        modRuntimeOnly("com.sighs:ApricityUI-forge-1.20.1:${apricityui_version}")
+    }
+}
+
+tasks.register('remapDecompiledSrgSources', Sync) {
+    from('src/main/java') {
+        filter { line ->
+            decompiledNameMappings.inject(line) { currentLine, entry ->
+                currentLine.replace(entry.key, entry.value)
+            }
+        }
+    }
+    into(remappedSourceDir)
+}
+
+tasks.named('compileJava').configure {
+    dependsOn tasks.named('remapDecompiledSrgSources')
+}
+
+tasks.named('sourcesJar').configure {
+    dependsOn tasks.named('remapDecompiledSrgSources')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
